@@ -24,5 +24,14 @@
         }
       ]
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Quick Note Widget",
+      "short_name": "Note",
+      "description": "Jot down a fast local note",
+      "url": "./?mode=widget",
+      "icons": [{"src": "https://cdn-icons-png.flaticon.com/512/337/337946.png", "sizes": "512x512"}]
+    }
+  ]
 }
