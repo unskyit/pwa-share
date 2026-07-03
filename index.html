@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MYR PDF Extract</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --primary: #007AFF;
+            --bg: #F2F2F7;
+            --surface: #FFFFFF;
+            --text: #1C1C1E;
+            --text-secondary: #8E8E93;
+            --radius: 16px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; display: flex; justify-content: center; min-height: 100vh; }
+        
+        .app-container { width: 100%; max-width: 400px; padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; }
+        
+        .header { text-align: center; margin-top: 10px; }
+        .logo { width: 64px; height: 64px; background: var(--primary); border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold; margin: 0 auto 16px auto; box-shadow: 0 8px 16px rgba(0,122,255,0.25); }
+        .title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+        .subtitle { font-size: 14px; color: var(--text-secondary); }
+
+        .card { background: var(--surface); border-radius: var(--radius); padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+        
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--primary); color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn:active { opacity: 0.8; }
+        .btn-outline { background: transparent; border: 1.5px solid var(--primary); color: var(--primary); }
+        
+        input[type="file"] { display: none; }
+        
+        .progress-area { display: none; text-align: center; margin-top: 16px; }
+        .progress-text { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; font-weight: 500; }
+        .progress-bar { width: 100%; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.2s ease-out; }
+
+        .notif-tester { margin-top: auto; }
+        .input-group { display: flex; gap: 10px; margin-top: 12px; }
+        .input-group input { flex: 1; padding: 12px; border: 1px solid #E5E5EA; border-radius: 12px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+        .input-group input:focus { border-color: var(--primary); }
+        
+        .badge { font-size: 11px; font-weight: 600; background: var(--bg); padding: 6px 10px; border-radius: 8px; color: var(--text-secondary); margin-top: 16px; display: inline-block; letter-spacing: 0.5px; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="logo">MYR</div>
+            <h1 class="title">PDF to ZIP</h1>
+            <p class="subtitle">Extract images from PDFs locally</p>
+        </div>
+
+        <div class="card">
+            <input type="file" id="fileInput" accept="application/pdf" multiple>
+            <button class="btn" onclick="document.getElementById('fileInput').click()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                Select PDF Files
+            </button>
+            
+            <div class="progress-area" id="progressArea">
+                <div class="progress-text" id="progressText">Processing...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card notif-tester">
+            <h3 style="font-size: 16px; font-weight: 600;">System Notification</h3>
+            <p class="subtitle" style="margin-top: 4px;">Trigger a local OS notification</p>
+            <div class="input-group">
+                <input type="text" id="notifText" placeholder="Type a message..." value="Hello how are you">
+                <button class="btn btn-outline" style="width: auto; padding: 12px 18px;" onclick="sendTestNotification()">Ping</button>
+            </div>
+            <div style="text-align: center;"><span class="badge">Fully Client-Side</span></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // 1. Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('SW Registered'))
+                    .catch(err => console.error('SW Error:', err));
+            });
+        }
+
+        // 2. Notification Tester Logic
+        function sendTestNotification() {
+            const text = document.getElementById('notifText').value || "Hello!";
+            
+            if (Notification.permission === 'granted') {
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification('MYR App', { 
+                        body: text, 
+                        icon: 'https://cdn-icons-png.flaticon.com/512/337/337946.png',
+                        vibrate: [200, 100, 200]
+                    });
+                });
+            } else {
+                Notification.requestPermission().then(perm => {
+                    if (perm === 'granted') sendTestNotification();
+                });
+            }
+        }
+
+        // 3. File Processing Core
+        const fileInput = document.getElementById('fileInput');
+        const progressArea = document.getElementById('progressArea');
+        const progressText = document.getElementById('progressText');
+        const progressFill = document.getElementById('progressFill');
+
+        // Handle standard file selection
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) processFiles(Array.from(e.target.files));
+        });
+
+        // 4. Handle incoming Share Intents from the OS
+        window.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            // If the Service Worker redirected us here after catching a share intent
+            if (urlParams.get('shared') === 'true') {
+                const files = await getFilesFromIndexedDB();
+                if (files && files.length > 0) {
+                    processFiles(files);
+                }
+                // Clean the URL so refreshing doesn't re-trigger
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
+
+        async function getFilesFromIndexedDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('SharedFilesDB', 1);
+                
+                request.onupgradeneeded = e => {
+                    e.target.result.createObjectStore('files', { autoIncrement: true });
+                };
+                
+                request.onsuccess = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('files')) return resolve([]);
+                    
+                    const tx = db.transaction('files', 'readwrite');
+                    const store = tx.objectStore('files');
+                    const getAll = store.getAll();
+                    
+                    getAll.onsuccess = () => {
+                        store.clear(); // Clean up DB immediately after fetching
+                        resolve(getAll.result);
+                    };
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // 5. PDF to Image & ZIP Logic
+        async function processFiles(files) {
+            progressArea.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.innerText = 'Initializing...';
+            
+            const zip = new JSZip();
+            let totalPages = 0;
+            let completedPages = 0;
+
+            try {
+                progressText.innerText = 'Analyzing PDFs...';
+                const pdfDocs = [];
+                
+                // First pass: Read files into PDF.js to get page counts
+                for (const file of files) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                    totalPages += pdf.numPages;
+                    pdfDocs.push({ name: file.name.replace('.pdf', ''), pdf: pdf });
+                }
+
+                // Second pass: Render pages to canvas and add to ZIP
+                for (const item of pdfDocs) {
+                    for (let i = 1; i <= item.pdf.numPages; i++) {
+                        progressText.innerText = `Converting: ${item.name} (Page ${i}/${item.pdf.numPages})`;
+                        
+                        const page = await item.pdf.getPage(i);
+                        // Scale 1.5 is a good balance between quality and mobile memory usage
+                        const viewport = page.getViewport({ scale: 1.5 }); 
+                        
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                        
+                        // Extract as JPEG data URL
+                        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+                        
+                        // Add to JSZip (stripping the "data:image/jpeg;base64," prefix)
+                        zip.file(`${item.name}_page_${i}.jpg`, imgData.split(',')[1], { base64: true });
+                        
+                        completedPages++;
+                        progressFill.style.width = `${(completedPages / totalPages) * 85}%`; 
+                    }
+                }
+
+                progressText.innerText = 'Archiving ZIP...';
+                // Generate ZIP file
+                const zipBlob = await zip.generateAsync({ type: 'blob' }, (meta) => {
+                    // Update the last 15% of the progress bar based on ZIP compression progress
+                    progressFill.style.width = `${85 + (meta.percent * 0.15)}%`;
+                });
+
+                // Trigger Download automatically
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `MYR_Extract_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+
+                progressText.innerText = 'Done!';
+                progressFill.style.width = '100%';
+                
+                // OS-level Completion Notification
+                if (Notification.permission === 'granted') {
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification('Extraction Complete', { 
+                            body: 'Your images have been successfully zipped and downloaded!',
+                            icon: 'https://cdn-icons-png.flaticon.com/512/337/337946.png',
+                            vibrate: [200, 100, 200]
+                        });
+                    });
+                }
+                
+                setTimeout(() => { 
+                    progressArea.style.display = 'none'; 
+                    progressFill.style.width = '0%';
+                }, 3500);
+
+            } catch (error) {
+                console.error(error);
+                progressText.innerText = 'An error occurred during processing.';
+                progressFill.style.backgroundColor = '#FF3B30'; // Red on error
+            }
+        }
+    </script>
+</body>
+</html>
